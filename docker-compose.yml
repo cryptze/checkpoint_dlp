@@ -1,0 +1,64 @@
+services:
+  db:
+    image: mysql:8.0
+    cap_add:
+      - SYS_NICE
+    restart: always
+    environment:
+      - MYSQL_DATABASE=dlp_db
+      - MYSQL_USER=dlp_user
+      - MYSQL_PASSWORD=dlp_password
+      - MYSQL_ROOT_PASSWORD=root_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+
+  queue:
+    image: localstack/localstack:0.14.0
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=sqs
+      - DEFAULT_REGION=us-east-1
+      - HOSTNAME=queue
+    volumes:
+      - "${TMPDIR:-/tmp/localstack}:/tmp/localstack"
+
+  backend:
+    build:
+      context: ./backend
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_HOST=db
+      - DB_NAME=dlp_db
+      - DB_USER=dlp_user
+      - DB_PASS=dlp_password
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_REGION=us-east-1
+      - SQS_QUEUE_URL=http://queue:4566/000000000000/dlp-queue
+    depends_on:
+      - db
+      - queue
+
+  dlp_worker:
+    build:
+      context: ./dlp_worker
+    command: python worker.py
+    volumes:
+      - ./dlp_worker:/app
+    environment:
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_REGION=us-east-1
+      - SQS_QUEUE_URL=http://queue:4566/000000000000/dlp-queue
+    depends_on:
+      - queue
+
+volumes:
+  db_data:
