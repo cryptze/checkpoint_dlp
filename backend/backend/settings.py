@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-9d-7ar(obie2monik3)q8$410bwxrc0x(qr+o&w%h8-xc+l5ht
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'backend', '.ngrok-free.app']
 
 
 # Application definition
@@ -37,6 +37,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'dlp_api',
+    'rest_framework',
 ]
 
 MIDDLEWARE = [
@@ -120,3 +122,7 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://eeaccee8962b.ngrok-free.app"
+]

@@ -1,6 +1,6 @@
 services:
   db:
-    image: mysql:8.0
+    image: mysql:5.7
     cap_add:
       - SYS_NICE
     restart: always
@@ -15,20 +15,25 @@ services:
       - db_data:/var/lib/mysql
 
   queue:
-    image: localstack/localstack:0.14.0
+    image: localstack/localstack:latest
     ports:
       - "4566:4566"
     environment:
       - SERVICES=sqs
       - DEFAULT_REGION=us-east-1
       - HOSTNAME=queue
-    volumes:
-      - "${TMPDIR:-/tmp/localstack}:/tmp/localstack"
+      - HOSTNAME_EXTERNAL=queue
+      - LOCALSTACK_API_KEY=
+      - DEBUG=1
+      - DATA_DIR=/tmp/localstack/data
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=us-east-1
 
   backend:
     build:
       context: ./backend
-    command: python manage.py runserver 0.0.0.0:8000
+    command: sh -c "python wait_for_queue.py && python manage.py runserver 0.0.0.0:8000"
     volumes:
       - ./backend:/app
     ports:
@@ -42,6 +47,9 @@ services:
       - AWS_SECRET_ACCESS_KEY=test
       - AWS_REGION=us-east-1
       - SQS_QUEUE_URL=http://queue:4566/000000000000/dlp-queue
+      - SQS_ENDPOINT_URL=http://queue:4566
+      - SQS_QUEUE_NAME=dlp-queue
+      - SLACK_BOT_TOKEN=xoxb-9238967559762-9227239254263-vJlpTZcILakvLubnOozYxee4
     depends_on:
       - db
       - queue
@@ -49,7 +57,7 @@ services:
   dlp_worker:
     build:
       context: ./dlp_worker
-    command: python worker.py
+    command: sh -c 'while true; do echo "Worker container is running..."; python worker.py; sleep 5; done'
     volumes:
       - ./dlp_worker:/app
     environment:
@@ -57,8 +65,13 @@ services:
       - AWS_SECRET_ACCESS_KEY=test
       - AWS_REGION=us-east-1
       - SQS_QUEUE_URL=http://queue:4566/000000000000/dlp-queue
+      - DJANGO_API_URL=http://backend:8000/api
+      - SQS_ENDPOINT_URL=http://queue:4566
+      - SQS_QUEUE_NAME=dlp-queue
+      - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
     depends_on:
       - queue
+      - backend
 
 volumes:
   db_data:

@@ -1,76 +1,129 @@
-# Checkpoint DLP Project
+# Checkpoint DLP
 
-This project is a system designed to detect and handle Data Loss Prevention (DLP) in text data. It uses a microservices architecture with a Django backend, a MySQL database, a LocalStack SQS queue, and a dedicated asynchronous Python worker for DLP processing.
+Sistema de Prevención de Fugas de Datos (DLP) para Slack, basado en Django y un worker asíncrono.
 
-## Architecture
+## Descripción
+Este proyecto detecta y bloquea mensajes sensibles en Slack usando patrones definidos por el usuario. Utiliza Django para la API y administración, y un worker asíncrono para procesar mensajes desde una cola SQS.
 
-The application is composed of the following services, orchestrated by Docker Compose:
+## Requisitos
+- Docker
+- Docker Compose
 
--   **`db`**: A MySQL database container to store application data.
--   **`queue`**: A LocalStack container simulating AWS SQS for messaging. This queue decouples the main application from the DLP processing task.
--   **`backend`**: A Django REST Framework application that provides an API to submit text for DLP analysis. When a request is received, it sends a message to the SQS queue.
--   **`dlp_worker`**: An asynchronous Python worker that listens for messages on the SQS queue. It consumes messages, performs DLP analysis on the text, and can take further action based on the results.
-
-## Project Structure
+## Configuración
+1. Clona el repositorio.
+2. Crea el archivo `.env` en `dlp_worker/` con las siguientes variables:
 
 ```
-.
-├── backend/
-│   ├── backend/          # Django project directory
-│   ├── dlp_api/          # Django app for the API
-│   ├── Dockerfile        # Dockerfile for the backend service
-│   ├── manage.py         # Django's command-line utility
-│   └── requirements.txt  # Python dependencies for the backend
-├── dlp_worker/
-│   ├── Dockerfile        # Dockerfile for the DLP worker service
-│   ├── requirements.txt  # Python dependencies for the worker
-│   └── worker.py         # The asynchronous DLP worker script
-├── docker-compose.yml    # Docker Compose file for all services
-└── README.md             # This file
+DJANGO_API_URL=http://backend:8000/api
+SQS_ENDPOINT_URL=http://localstack:4566
+SQS_QUEUE_NAME=dlp_tasks
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=test
+AWS_SECRET_ACCESS_KEY=test
+SLACK_BOT_TOKEN=TU_TOKEN_DE_SLACK
 ```
 
-## Getting Started
+3. Asegúrate de tener tus credenciales y tokens correctos.
 
-### Prerequisites
+## Ejecución
+Desde la raíz del proyecto, ejecuta:
 
--   Docker
--   Docker Compose
-
-### Installation and Running
-
-1.  **Build the Docker containers:**
-    ```bash
-    docker-compose build
+```
+docker-compose up --build
     ```
 
-2.  **Start all services:**
-    ```bash
-    docker-compose up
-    ```
+Esto levantará todos los servicios necesarios: Django, LocalStack (SQS), y el worker DLP.
 
-This command will start the database, queue, backend, and DLP worker. The Django backend will be available at `http://localhost:8000`.
+## Uso
+1. Accede al admin de Django en `http://localhost:8000/admin` y añade patrones de regex para detectar información sensible.
+2. Envía un mensaje en Slack en el canal conectado al bot.
+3. Si el mensaje coincide con algún patrón, será bloqueado y registrado como fuga en el sistema.
 
-## How It Works
+---
 
-1.  The `backend` application exposes an API endpoint to receive text data.
-2.  When a request with text is received, the `backend` creates a message and sends it to the `dlp-queue` in LocalStack. The message has a specific format, for example:
-    ```json
-    {
-      "task": "process_text",
-      "args": ["Some text to be scanned for sensitive data..."],
-      "kwargs": {}
-    }
-    ```
-3.  The `dlp_worker` is constantly polling the queue for new messages.
-4.  When a message is received, the worker's `Manager` class invokes the appropriate task (`process_text` in this case) and passes the arguments.
-5.  The task function (`process_text_for_dlp`) executes the DLP scanning logic on the text.
+## Pruebas
+- Prueba los endpoints de la API de Django usando herramientas como Postman o curl.
+- Prueba la lógica de regex en una función aislada (ver ejemplo en `dlp_worker/tasks.py`).
+- Verifica que los modelos de Django guardan los datos correctamente desde el admin o la shell de Django.
 
-## Next Steps
+---
 
-The following are the next logical steps in the development of this project:
+¡Exactamente! Si los logs del `dlp_worker` están vacíos, pero el backend está enviando mensajes a la cola, el problema está en el worker. Aquí tienes una guía para depurar y solucionar esto:
 
-1.  **Implement the API Endpoint**: Create the view and serializer in the `dlp_api` Django app to handle incoming requests and send messages to the SQS queue.
-2.  **Configure Django Settings**: Adjust the `settings.py` file to connect to the MySQL database and configure the LocalStack SQS queue connection.
-3.  **Flesh out the DLP Logic**: Enhance the `process_text_for_dlp` function in `dlp_worker/worker.py` with actual DLP detection rules and logic.
-4.  **Database Models**: Define the necessary Django models in `dlp_api/models.py` to store the results of the DLP scans or any other relevant data.
-5.  **Run Migrations**: Create and apply database migrations to set up the necessary tables.
+---
+
+## **1. Verifica que el worker esté corriendo**
+
+Ejecuta:
+```bash
+docker-compose ps
+```
+- El estado del contenedor `dlp_worker` debe ser `Up`.
+- Si está en `Exited`, revisa los logs con:
+  ```bash
+  docker-compose logs dlp_worker
+  ```
+
+---
+
+## **2. Ejecuta el worker manualmente para ver errores en tiempo real**
+
+Entra al contenedor:
+```bash
+docker-compose run --rm dlp_worker bash
+```
+Y dentro del contenedor, ejecuta:
+```bash
+python manager.py
+```
+- Observa si imprime mensajes de inicialización o si muestra algún error.
+
+---
+
+## **3. Verifica las variables de entorno en el worker**
+
+Asegúrate de que el servicio `dlp_worker` en tu `docker-compose.yml` tenga las mismas variables de entorno que el backend:
+
+```yaml
+<code_block_to_apply_changes_from>
+```
+
+---
+
+## **4. Agrega prints de depuración en el worker**
+
+En el inicio de `manager.py`, antes de crear la sesión SQS, agrega:
+
+```python
+import os
+print("SQS_QUEUE_NAME:", os.getenv('SQS_QUEUE_NAME'))
+print("SQS_ENDPOINT_URL:", os.getenv('SQS_ENDPOINT_URL'))
+print("AWS_REGION:", os.getenv('AWS_REGION'))
+print("AWS_ACCESS_KEY_ID:", os.getenv('AWS_ACCESS_KEY_ID'))
+print("AWS_SECRET_ACCESS_KEY:", os.getenv('AWS_SECRET_ACCESS_KEY'))
+```
+
+Esto te permitirá ver si el worker está recibiendo correctamente las variables de entorno.
+
+---
+
+## **5. Reinicia el worker**
+
+```bash
+docker-compose restart dlp_worker
+```
+y revisa los logs:
+```bash
+docker-compose logs -f dlp_worker
+```
+
+---
+
+## **6. Si sigue sin mostrar nada**
+
+- Comparte aquí cualquier mensaje de error que veas al ejecutar el worker manualmente.
+- Si el worker imprime las variables correctamente pero no procesa mensajes, revisa que la cola SQS realmente tenga mensajes (puedes usar la interfaz de LocalStack o prints en el backend justo después de enviar el mensaje).
+
+---
+
+¿Puedes probar estos pasos y compartir aquí lo que ves al ejecutar el worker manualmente o en los logs? Así te ayudo a encontrar el cuello de botella exacto.

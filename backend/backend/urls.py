@@ -15,8 +15,11 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, include
+from dlp_api.views import slack_events_webhook
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('api/', include('dlp_api.urls')),
+    path('slack/events/', slack_events_webhook, name='slack_events_webhook'),
 ]
